@@ -182,24 +182,22 @@ dibujar_personaje:
         //Cabeza
         movz w5, #0x07E0
         
-        add x1, X1, #3
-        add x2, x2, #10 
-        mov x3, #16
-        mov x4, #12
-        bl dibujar_recta
+        add x1, X1, #11
+        add x2, x2, #18 
+        bl dibujar_circulo
         
         mov x11, x1 
         mov x12, x2
 
         //ojos
         movz w5, #0x0000
-        add x1, x1, #2
-        add x2, x2, #2
+        add x1, x1, #-5
+        add x2, x2, #-5
         mov x3, #2
         mov x4, #2
         bl dibujar_recta
 
-        add x1, x1, #8
+        add x1, x1, #10
         bl dibujar_recta
 
 
@@ -209,8 +207,8 @@ dibujar_personaje:
         mov x1, x11
         mov x2, x12
         //cuello
-        add x1, x1, #4
-        add x2, x2, #12
+        add x1, x1, #-4
+        add x2, x2, #8
         mov x3, #8
         mov x4, #2
         bl dibujar_recta
@@ -330,3 +328,110 @@ tri_siguiente:
 
 tri_fin:
     ret
+
+dibujar_circulo:
+
+    // Guardar registros
+    mov x19, x30
+    mov x20, x1
+    mov x21, x2
+
+    // =========================================
+    // DIBUJAR HACIA ABAJO
+    // =========================================
+
+    mov x23, #0
+
+circulo_abajo:
+
+    // Y^2
+    mul x24, x23, x23
+
+    // Probar semiancho desde 8
+    mov x25, #8
+
+calcular_ancho_abajo:
+
+    mul x26, x25, x25
+    add x27, x26, x24
+
+    cmp x27, #64
+    b.le ancho_encontrado_abajo
+
+    sub x25, x25, #1
+    b calcular_ancho_abajo
+
+ancho_encontrado_abajo:
+
+    // Ancho total = 2 * semiancho + 1
+    lsl x3, x25, #1
+    add x3, x3, #1
+
+    // X inicial
+    sub x1, x20, x25
+
+    // Y actual
+    add x2, x21, x23
+
+    // Altura = 1
+    mov x4, #1
+
+    bl dibujar_recta
+
+    add x23, x23, #1
+
+    cmp x23, #8
+    b.le circulo_abajo
+
+
+    // =========================================
+    // DIBUJAR HACIA ARRIBA
+    // =========================================
+
+    mov x23, #1
+
+circulo_arriba:
+
+    // Y^2
+    mul x24, x23, x23
+
+    // Probar semiancho
+    mov x25, #8
+
+calcular_ancho_arriba:
+
+    mul x26, x25, x25
+    add x27, x26, x24
+
+    cmp x27, #64
+    b.le ancho_encontrado_arriba
+
+    sub x25, x25, #1
+    b calcular_ancho_arriba
+
+ancho_encontrado_arriba:
+
+    // Ancho total
+    lsl x3, x25, #1
+    add x3, x3, #1
+
+    // X inicial
+    sub x1, x20, x25
+
+    // Y actual
+    sub x2, x21, x23
+
+    mov x4, #1
+
+    bl dibujar_recta
+
+    add x23, x23, #1
+
+    cmp x23, #8
+    b.le circulo_arriba
+
+
+
+
+    br x19
+
