@@ -2,9 +2,116 @@
 .global app
 
 app:
-    mov x10, x0              // Base del framebuffer
 
+    // ========================================
+    // INICIALIZACION
+    // ========================================
+
+    // Base de los GPIO
+    mov w20, PERIPHERAL_BASE + GPIO_BASE
+
+    // GPIO 14, 15, 17 y 18 como entradas
+    mov w21, #0
+    str w21, [x20, GPIO_GPFSEL1]
+
+    // Base del framebuffer
+    mov x10, x0
+
+    // Coordenadas permanentes del personaje
+    mov x28, #70
+    mov x29, #42
+
+    // Dibujar escenario inicial
+    bl dibujar_laberinto
+
+    mov x1, x28
+    mov x2, x29
+    bl dibujar_personaje
+
+
+// ========================================
+// BUCLE PRINCIPAL
+// ========================================
+
+loop_principal:
+
+    // Leer pulsadores
+    bl inputRead
+
+    // GPIO14: ARRIBA
+    tbnz w22, #14, mover_arriba
+
+    // GPIO15: IZQUIERDA
+    tbnz w22, #15, mover_izquierda
+
+    // GPIO17: DERECHA
+    tbnz w22, #17, mover_derecha
+
+    // GPIO18: ABAJO
+    tbnz w22, #18, mover_abajo
+
+    // Ningun pulsador presionado
+    b loop_principal
+
+
+// ========================================
+// ACTUALIZAR COORDENADAS
+// ========================================
+
+mover_arriba:
+    sub x29, x29, #5
+    b actualizar_personaje
+
+mover_abajo:
+    add x29, x29, #5
+    b actualizar_personaje
+
+mover_izquierda:
+    sub x28, x28, #5
+    b actualizar_personaje
+
+mover_derecha:
+    add x28, x28, #5
+    b actualizar_personaje
+
+
+// ========================================
+// REDIBUJAR ESCENARIO Y PERSONAJE
+// ========================================
+
+actualizar_personaje:
+
+    // Redibujar el laberinto:
+    // esto borra al personaje anterior
+    bl dibujar_laberinto
+
+    // Recuperar coordenadas del personaje
+    mov x1, x28
+    mov x2, x29
+
+    // Dibujar personaje en la nueva posición
+    bl dibujar_personaje
+
+
+// ========================================
+// RETARDO ENTRE MOVIMIENTOS
+// ========================================
+
+    // Aproximadamente unas decenas de ms.
+    // El tiempo exacto depende de la CPU.
+movz x14, #0x4240
+movk x14, #0x000F, lsl #16
+
+delay_movimiento:
+    subs x14, x14, #1
+    b.ne delay_movimiento
+
+    b loop_principal
+
+
+dibujar_laberinto:
     // Fondo rojo
+    mov x18, x30
     mov x1, #0
     mov x2, #0
     mov x3, #512
@@ -170,11 +277,10 @@ app:
     mov x4, #99
     bl dibujar_recta
 
-    mov x1, #70
-    mov x2, #42
-
+    br x18
 
 dibujar_personaje:
+        mov x17, x30
         movz w5, #0xB420
 
         // sombrero
@@ -192,7 +298,7 @@ dibujar_personaje:
         //ojos
         movz w5, #0x0000
         sub x1, x1, #3
-        add x2, x2, #4
+        sub x2, x2, #2
         mov x3, #2
         mov x4, #2
         bl dibujar_recta
@@ -207,8 +313,8 @@ dibujar_personaje:
         mov x1, x11
         mov x2, x12
         //cuello
-        add x1, x1, #-3
-        add x2, x2, #15
+        sub x1, x1, #4
+        add x2, x2, #7
         mov x3, #8
         mov x4, #2
         bl dibujar_recta
@@ -231,7 +337,7 @@ dibujar_personaje:
 
         mov x1, x11
 
-        add x1, x1, 17
+        add x1, x1, #17
         mov x3, #3
         mov x4, #10
         bl dibujar_recta
@@ -251,11 +357,9 @@ dibujar_personaje:
         mov x3, #4
         mov x4, #8
         bl dibujar_recta
-        
+    
+    br x17
 
-
-InfLoop:
-    b InfLoop
 
 // dibujar_recta: X10=base, X1=x, X2=y, X3=ancho, X4=alto, W5=RGB565
 dibujar_pixel:
@@ -331,9 +435,9 @@ tri_fin:
 
 dibujar_circulo:
 
-    // Guardar registros
-    mov x19, x30
-    mov x20, x1
+    // Guardar retorno y centro
+    mov x16, x30
+    mov x19, x1
     mov x21, x2
 
     // =========================================
@@ -344,10 +448,8 @@ dibujar_circulo:
 
 circulo_abajo:
 
-    // Y^2
     mul x24, x23, x23
 
-    // Probar semiancho desde 8
     mov x25, #8
 
 calcular_ancho_abajo:
@@ -363,17 +465,12 @@ calcular_ancho_abajo:
 
 ancho_encontrado_abajo:
 
-    // Ancho total = 2 * semiancho + 1
     lsl x3, x25, #1
     add x3, x3, #1
 
-    // X inicial
-    sub x1, x20, x25
-
-    // Y actual
+    sub x1, x19, x25
     add x2, x21, x23
 
-    // Altura = 1
     mov x4, #1
 
     bl dibujar_recta
@@ -392,10 +489,8 @@ ancho_encontrado_abajo:
 
 circulo_arriba:
 
-    // Y^2
     mul x24, x23, x23
 
-    // Probar semiancho
     mov x25, #8
 
 calcular_ancho_arriba:
@@ -411,14 +506,10 @@ calcular_ancho_arriba:
 
 ancho_encontrado_arriba:
 
-    // Ancho total
     lsl x3, x25, #1
     add x3, x3, #1
 
-    // X inicial
-    sub x1, x20, x25
-
-    // Y actual
+    sub x1, x19, x25
     sub x2, x21, x23
 
     mov x4, #1
@@ -431,8 +522,14 @@ ancho_encontrado_arriba:
     b.le circulo_arriba
 
 
+    // Restaurar coordenadas originales
+    mov x1, x19
+    mov x2, x21
+
+    // Retornar
+    br x16
 
 
-    br x19
+
 
 
