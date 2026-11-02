@@ -182,7 +182,7 @@ dibujar_personaje:
         //Cabeza
         movz w5, #0x07E0
         
-        add x1, X1, #11
+        add x1, X1, #10
         add x2, x2, #18 
         bl dibujar_circulo
         
@@ -191,13 +191,13 @@ dibujar_personaje:
 
         //ojos
         movz w5, #0x0000
-        add x1, x1, #-5
-        add x2, x2, #-5
+        sub x1, x1, #3
+        add x2, x2, #4
         mov x3, #2
         mov x4, #2
         bl dibujar_recta
 
-        add x1, x1, #10
+        add x1, x1, #8
         bl dibujar_recta
 
 
@@ -207,8 +207,8 @@ dibujar_personaje:
         mov x1, x11
         mov x2, x12
         //cuello
-        add x1, x1, #-4
-        add x2, x2, #8
+        add x1, x1, #-3
+        add x2, x2, #15
         mov x3, #8
         mov x4, #2
         bl dibujar_recta
@@ -434,4 +434,5 @@ ancho_encontrado_arriba:
 
 
     br x19
+
 
