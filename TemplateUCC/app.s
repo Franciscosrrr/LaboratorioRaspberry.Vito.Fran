@@ -35,8 +35,17 @@ app:
 
 loop_principal:
 
+    mov w21, #8
+    str w21, [x20, #0x28]
+
+    mov w21, #4
+    str w21, [x20, #0x1C]
     // Leer pulsadores
     bl inputRead
+
+    // Recuperar posición actual
+    mov x1, x28
+    mov x2, x29
 
     // GPIO14: ARRIBA
     tbnz w22, #14, mover_arriba
@@ -50,7 +59,17 @@ loop_principal:
     // GPIO18: ABAJO
     tbnz w22, #18, mover_abajo
 
-    // Ningun pulsador presionado
+    // Ningún pulsador presionado
+    bl comprobar_meta
+
+    b loop_principal
+
+
+// ========================================
+// CANCELAR MOVIMIENTO
+// ========================================
+
+cancelar_movimiento:
     b loop_principal
 
 
@@ -59,46 +78,62 @@ loop_principal:
 // ========================================
 
 mover_arriba:
-    sub x29, x29, #5
+    sub x2, x2, #5
     b actualizar_personaje
 
 mover_abajo:
-    add x29, x29, #5
+    add x2, x2, #5
     b actualizar_personaje
 
 mover_izquierda:
-    sub x28, x28, #5
+    sub x1, x1, #5
     b actualizar_personaje
 
 mover_derecha:
-    add x28, x28, #5
+    add x1, x1, #5
     b actualizar_personaje
 
 
 // ========================================
-// REDIBUJAR ESCENARIO Y PERSONAJE
+// COMPROBAR Y ACEPTAR MOVIMIENTO
 // ========================================
 
 actualizar_personaje:
 
-    // Redibujar el laberinto:
-    // esto borra al personaje anterior
+    // ¿El personaje está dentro del ancho de la salida?
+    cmp x1, #282
+    b.lt verificar_colision
+
+    cmp x1, #321
+    b.gt verificar_colision
+
+    // ¿Está llegando al borde inferior?
+    add x13, x2, #49
+    cmp x13, #487
+    b.lt verificar_colision
+
+    // Está en la salida: permitir avanzar
+    b aceptar_movimiento
+
+verificar_colision:
+    bl detectar_colision
+    cbnz w0, cancelar_movimiento
+
+aceptar_movimiento:
+    mov x28, x1
+    mov x29, x2
+
     bl dibujar_laberinto
 
-    // Recuperar coordenadas del personaje
     mov x1, x28
     mov x2, x29
-
-    // Dibujar personaje en la nueva posición
     bl dibujar_personaje
 
+    bl comprobar_meta
+    cbnz w0, reiniciar_juego
 
-// ========================================
-// RETARDO ENTRE MOVIMIENTOS
-// ========================================
+    b loop_principal
 
-    // Aproximadamente unas decenas de ms.
-    // El tiempo exacto depende de la CPU.
 movz x14, #0x4240
 movk x14, #0x000F, lsl #16
 
@@ -288,7 +323,7 @@ dibujar_personaje:
         //Cabeza
         movz w5, #0x07E0
         
-        add x1, X1, #10
+        add x1, X1, #11
         add x2, x2, #18 
         bl dibujar_circulo
         
@@ -313,7 +348,7 @@ dibujar_personaje:
         mov x1, x11
         mov x2, x12
         //cuello
-        sub x1, x1, #4
+        sub x1, x1, #3
         add x2, x2, #7
         mov x3, #8
         mov x4, #2
@@ -347,7 +382,7 @@ dibujar_personaje:
         mov x1, x11
         mov x2, x12
 
-        add x1, x1, #2
+        add x1, x1, #1
         add x2, x2, #15
         mov x3, #4
         mov x4, #8
@@ -530,6 +565,120 @@ ancho_encontrado_arriba:
     br x16
 
 
+detectar_colision:
+
+    mov x13, x1
+    add x17, x1, #24
+
+
+    mov x14, x2
+    add x18, x2, #50
+
+fila_colision:
+
+    cmp x14, x18
+    b.ge sin_colision
+
+    mov x15, x13           // X actual
+
+pixel_colision:
+
+    cmp x15, x17
+    b.ge siguiente_fila
+
+    // Dirección del píxel:
+    // framebuffer + 2 * (X + Y * 512)
+
+    lsl x16, x14, #9
+    add x16, x16, x15
+    lsl x16, x16, #1
+    add x16, x10, x16
+
+    // Leer color del píxel
+    ldrh w16, [x16]
+
+    // ¿Es azul?
+    cmp w16, #0x001F
+    b.eq hay_colision
+
+    add x15, x15, #1
+    b pixel_colision
+
+siguiente_fila:
+
+    add x14, x14, #1
+    b fila_colision
+
+reiniciar_juego:
+    // Apagar LED rojo (GPIO 3)
+    mov w21, #8
+    str w21, [x20, #0x1C]
+
+    // Encender LED verde (GPIO 2)
+    mov w21, #4
+    str w21, [x20, #0x28]
+
+    // Espera de reinicio
+    mov x13, #30
+
+espera_externa:
+
+    movz x14, #0x4240
+    movk x14, #0x000F, lsl #16
+
+espera_interna:
+
+    subs x14, x14, #1
+    b.ne espera_interna
+
+    subs x13, x13, #1
+    b.ne espera_externa
+
+
+    mov x28, #70
+    mov x29, #42
+
+
+    bl dibujar_laberinto
+
+    mov x1, x28
+    mov x2, x29
+    bl dibujar_personaje
+
+    b loop_principal
+
+hay_colision:
+
+    mov w0, #1
+    ret
+
+sin_colision:
+
+    mov w0, #0
+    ret
+
+
+
+comprobar_meta:
+
+
+    cmp x28, #282
+    b.lt sin_meta
+
+    cmp x28, #321
+    b.gt sin_meta
+
+    add x13, x29, #49
+    cmp x13, #497
+    b.lt sin_meta
+
+    // Victoria
+    mov w0, #1
+    ret
+
+sin_meta:
+    mov w0, #0
+    ret
 
 
 
